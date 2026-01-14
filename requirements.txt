@@ -1,7 +1,0 @@
-requests>=2.31.0
-click>=8.1.7
-pytrakt>=4.2.2
-python-dotenv>=1.0.0
-keyring>=24.3.0
-requests-cache>=1.2.0
-peewee>=3.17.0
