@@ -11,7 +11,7 @@ import logging
 import os
 import sqlite3
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -145,7 +145,7 @@ class MatchDB:
         Args:
             result: MatchResult to save
         """
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         matched_at = result.matched_at.isoformat() if result.matched_at else None
 
         with sqlite3.connect(self.db_path) as conn:
@@ -243,6 +243,29 @@ class ShowMatcher:
         else:
             self.trakt_available = True
             self.trakt = TraktClient(trakt_client_id or env_client_id, trakt_client_secret or env_client_secret)
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - cleanup resources."""
+        # Ensure HTTP sessions are closed
+        try:
+            session = get_trakt_session()
+            if hasattr(session, 'close'):
+                session.close()
+        except Exception:
+            pass
+        
+        try:
+            session = get_tvdb_session()
+            if hasattr(session, 'close'):
+                session.close()
+        except Exception:
+            pass
+        
+        return False
 
     def match(self, viki_show: Dict) -> MatchResult:
         """Match Viki show to Trakt show.
@@ -417,7 +440,7 @@ class ShowMatcher:
                         trakt_title=data.get("title"),
                         match_confidence=1.0,
                         match_method="slug_lookup",
-                        matched_at=datetime.utcnow(),
+                        matched_at=datetime.now(timezone.utc),
                     )
 
             # 4) As last resort, fall back to first search result
@@ -450,7 +473,7 @@ class ShowMatcher:
             trakt_title=trakt_title,
             match_confidence=confidence,
             match_method=method,
-            matched_at=datetime.utcnow(),
+            matched_at=datetime.now(timezone.utc),
         )
 
         
@@ -547,7 +570,7 @@ class ShowMatcher:
                 tvdb_id=int(tvdb_id) if isinstance(tvdb_id, (int, str)) and str(tvdb_id).isdigit() else None,
                 match_confidence=0.95,
                 match_method="tvdb",
-                matched_at=datetime.utcnow(),
+                matched_at=datetime.now(timezone.utc),
             )
 
         except requests.RequestException as e:
@@ -695,7 +718,7 @@ class ShowMatcher:
                 tvdb_id=int(tvdb_id) if isinstance(tvdb_id, (int, str)) and str(tvdb_id).isdigit() else None,
                 match_confidence=confidence,
                 match_method=method,
-                matched_at=datetime.utcnow(),
+                matched_at=datetime.now(timezone.utc),
             )
 
         except requests.RequestException as e:
@@ -804,7 +827,7 @@ class ShowMatcher:
                         tvdb_id=tvdb_id,
                         match_confidence=confidence_boost,
                         match_method="mdl",
-                        matched_at=datetime.utcnow(),
+                        matched_at=datetime.now(timezone.utc),
                     )
                 
                 # No alias matched to Trakt

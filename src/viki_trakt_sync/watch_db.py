@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -39,6 +39,16 @@ class WatchDB:
     def __init__(self):
         init_models()
         self.db_path = Path(database.database) if hasattr(database, "database") else None
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - close database connection."""
+        if hasattr(database, 'close'):
+            database.close()
+        return False
 
     def upsert_show(
         self,
@@ -51,7 +61,7 @@ class WatchDB:
         trakt_slug: Optional[str] = None,
         trakt_title: Optional[str] = None,
     ) -> None:
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with database.atomic():
             first_seen = now
             existing = Show.get_or_none(Show.viki_container_id == viki_container_id)
@@ -90,7 +100,7 @@ class WatchDB:
              .execute())
 
     def upsert_episode(self, rec: EpisodeRecord) -> None:
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with database.atomic():
             (Episode
              .insert(
@@ -126,7 +136,7 @@ class WatchDB:
     def record_scan(self, source: str, items: int) -> None:
         with database.atomic():
             Scan.insert(
-                scanned_at=datetime.utcnow().isoformat(),
+                scanned_at=datetime.now(timezone.utc).isoformat(),
                 source=source,
                 items=items,
             ).execute()
@@ -134,7 +144,7 @@ class WatchDB:
     def save_snapshot(self, payload: Dict, source: str) -> None:
         with database.atomic():
             Snapshot.insert(
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
                 source=source,
                 payload=json.dumps(payload),
             ).execute()
@@ -145,6 +155,78 @@ class WatchDB:
             "episodes": Episode.select().count(),
             "scans": Scan.select().count(),
         }
+
+    def get_show_progress(self, viki_container_id: str) -> Dict:
+        """Get watched/watching status for a show.
+        
+        Returns show metadata plus episode progress breakdown.
+        """
+        try:
+            show = Show.get(Show.viki_container_id == viki_container_id)
+        except Show.DoesNotExist:
+            return None
+        
+        episodes = Episode.select().where(Episode.viki_container_id == viki_container_id)
+        
+        total_eps = episodes.count()
+        watched_eps = episodes.where(Episode.is_watched == 1).count()
+        in_progress_eps = episodes.where(
+            (Episode.is_watched.is_null(False)) & (Episode.is_watched == 0)
+        ).count()
+        
+        # Get last watched episode
+        last_ep = (
+            episodes
+            .where(Episode.last_watched_at.is_null(False))
+            .order_by(Episode.last_watched_at.desc())
+            .first()
+        )
+        
+        return {
+            "show_id": show.viki_container_id,
+            "title": show.title,
+            "trakt_id": show.trakt_id,
+            "total_episodes": total_eps,
+            "watched_episodes": watched_eps,
+            "in_progress_episodes": in_progress_eps,
+            "last_watched_ep": last_ep.episode_number if last_ep else None,
+            "last_watched_at": last_ep.last_watched_at if last_ep else None,
+        }
+    
+    def get_all_progress(self) -> list[Dict]:
+        """Get all shows with their watch progress."""
+        shows = Show.select().order_by(Show.last_seen.desc())
+        return [
+            self.get_show_progress(show.viki_container_id)
+            for show in shows
+        ]
+    
+    def get_show_episodes(self, viki_container_id: str) -> list[Dict]:
+        """Get all episode watch markers for a specific show.
+        
+        Args:
+            viki_container_id: Viki container ID
+        
+        Returns:
+            List of episode records with watch progress
+        """
+        episodes = Episode.select().where(
+            Episode.viki_container_id == viki_container_id
+        ).order_by(Episode.episode_number)
+        
+        return [
+            {
+                "video_id": ep.viki_video_id,
+                "episode_number": ep.episode_number,
+                "duration": ep.duration,
+                "watched_seconds": ep.watched_seconds,
+                "progress_percent": ep.progress_percent,
+                "is_watched": bool(ep.is_watched) if ep.is_watched is not None else None,
+                "last_watched_at": ep.last_watched_at,
+                "credits_marker": ep.credits_marker,
+            }
+            for ep in episodes
+        ]
 
     def ingest_watch_markers(self, markers: Dict, source: str = "watchlist") -> int:
         count = 0

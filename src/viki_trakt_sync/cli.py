@@ -864,6 +864,126 @@ def watchdb_stats():
         sys.exit(1)
 
 
+@watchdb.command(name="progress")
+@click.option("--show", "-s", help="Filter by show title (partial match)")
+@click.option("--limit", "-n", type=int, default=20, help="Limit results")
+def watchdb_progress(show: Optional[str], limit: int):
+    """Show watch progress for all shows (watched/watching episodes)."""
+    from .watch_db import WatchDB
+    try:
+        with WatchDB() as db:
+            all_progress = db.get_all_progress()
+            
+            # Filter by show title if provided
+            if show:
+                all_progress = [
+                    p for p in all_progress 
+                    if p and p.get("title") and show.lower() in (p.get("title") or "").lower()
+                ]
+            
+            click.echo(f"\n📺 Watch Progress ({len(all_progress)} shows)\n")
+            
+            for idx, prog in enumerate(all_progress[:limit], 1):
+                if not prog:
+                    continue
+                
+                title = prog.get("title", "Unknown")
+                watched = prog.get("watched_episodes", 0)
+                total = prog.get("total_episodes", 0)
+                in_progress = prog.get("in_progress_episodes", 0)
+                
+                # Progress bar
+                if total > 0:
+                    pct = (watched / total) * 100
+                    bar_len = 20
+                    filled = int(bar_len * watched / total)
+                    bar = "█" * filled + "░" * (bar_len - filled)
+                    progress_str = f"{bar} {watched}/{total} ({pct:.0f}%)"
+                else:
+                    progress_str = "No episodes"
+                
+                status = ""
+                if in_progress > 0:
+                    status = f" | {in_progress} in progress"
+                
+                click.echo(f"{idx:2}. {title}")
+                click.echo(f"    {progress_str}{status}")
+                if prog.get("last_watched_at"):
+                    click.echo(f"    Last: Ep {prog.get('last_watched_ep')} at {prog.get('last_watched_at')[:10]}")
+                click.echo()
+            
+            if len(all_progress) > limit:
+                click.echo(f"... and {len(all_progress) - limit} more shows")
+    
+    except Exception as e:
+        click.echo(f"✗ Error: {e}", err=True)
+        sys.exit(1)
+
+
+@watchdb.command(name="show")
+@click.argument("container_id")
+def watchdb_show(container_id: str):
+    """Show detailed episode watch markers for a specific show."""
+    from .watch_db import WatchDB
+    try:
+        with WatchDB() as db:
+            progress = db.get_show_progress(container_id)
+            if not progress:
+                click.echo(f"✗ Show not found: {container_id}", err=True)
+                sys.exit(1)
+            
+            # Display show header
+            click.echo(f"\n📺 {progress['title']}")
+            if progress['trakt_id']:
+                click.echo(f"   Trakt ID: {progress['trakt_id']}")
+            click.echo()
+            
+            # Display progress summary
+            total = progress['total_episodes']
+            watched = progress['watched_episodes']
+            in_progress = progress['in_progress_episodes']
+            
+            if total > 0:
+                pct = (watched / total) * 100
+                click.echo(f"📊 Progress: {watched}/{total} watched ({pct:.0f}%)")
+                if in_progress > 0:
+                    click.echo(f"   {in_progress} episodes in progress")
+                click.echo()
+            
+            # Display episode details
+            episodes = db.get_show_episodes(container_id)
+            if episodes:
+                click.echo(f"📑 Episodes ({len(episodes)} total):\n")
+                for ep in episodes:
+                    ep_num = ep['episode_number'] or "?"
+                    is_watched = ep['is_watched']
+                    progress_pct = ep['progress_percent'] or 0
+                    
+                    status = "✓" if is_watched else "⏸" if progress_pct > 0 else "○"
+                    
+                    progress_bar = ""
+                    if ep['duration'] and ep['watched_seconds'] is not None:
+                        bar_len = 15
+                        filled = int(bar_len * progress_pct / 100)
+                        progress_bar = f" [{filled*'█'}{(bar_len-filled)*'░'}] {progress_pct:.0f}%"
+                    
+                    last_watched = ""
+                    if ep['last_watched_at']:
+                        last_watched = f" (last: {ep['last_watched_at'][:10]})"
+                    
+                    click.echo(f"  {status} Episode {ep_num:3d}{progress_bar}{last_watched}")
+            else:
+                click.echo("No episode data recorded")
+    
+    except Exception as e:
+        click.echo(f"✗ Error: {e}", err=True)
+        sys.exit(1)
+        click.echo(f"Path: {db.db_path}")
+    except Exception as e:
+        click.echo(f"✗ Error: {e}", err=True)
+        sys.exit(1)
+
+
 @main.group()
 def dataset():
     """Matching dataset builder (offline corpus)."""

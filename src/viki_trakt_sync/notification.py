@@ -4,7 +4,7 @@ import json
 import logging
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -97,7 +97,7 @@ class TokenStatusTracker:
         last_notif = self.status.get("last_notification_sent_at")
         if last_notif:
             last_notif_time = datetime.fromisoformat(last_notif)
-            time_since = datetime.utcnow() - last_notif_time
+            time_since = datetime.now(timezone.utc) - last_notif_time
             if time_since < timedelta(hours=24):
                 logger.debug(f"Already notified {time_since.total_seconds() / 3600:.1f}h ago, skipping")
                 return False
@@ -114,9 +114,9 @@ class TokenStatusTracker:
         self.status["current_token"] = token
         self.status["token_status"] = "expired"
         self.status["first_failure_at"] = (
-            self.status.get("first_failure_at") or datetime.utcnow().isoformat()
+            self.status.get("first_failure_at") or datetime.now(timezone.utc).isoformat()
         )
-        self.status["last_notification_sent_at"] = datetime.utcnow().isoformat()
+        self.status["last_notification_sent_at"] = datetime.now(timezone.utc).isoformat()
         self.status["notification_count"] = self.status.get("notification_count", 0) + 1
         self._save_status()
 

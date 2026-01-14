@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -64,7 +64,7 @@ class WatchHistoryCache:
             # Check if cache is fresh (has timestamp)
             if "cached_at" in data:
                 cached_time = datetime.fromisoformat(data["cached_at"])
-                age_hours = (datetime.utcnow() - cached_time).total_seconds() / 3600
+                age_hours = (datetime.now(timezone.utc) - cached_time.replace(tzinfo=timezone.utc)).total_seconds() / 3600
                 logger.info(f"Using cached watch history (age: {age_hours:.1f}h)")
             else:
                 logger.info("Using cached watch history (age unknown)")
@@ -91,7 +91,7 @@ class WatchHistoryCache:
             cache_data_content["shows"] = shows
 
         cache_data = {
-            "cached_at": datetime.utcnow().isoformat(),
+            "cached_at": datetime.now(timezone.utc).isoformat(),
             "data": cache_data_content,
             "metadata": metadata or {},
         }

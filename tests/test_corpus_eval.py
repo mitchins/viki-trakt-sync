@@ -20,13 +20,7 @@ def corpus_data():
         return json.load(f)
 
 
-@pytest.fixture
-def matcher():
-    """Create matcher instance."""
-    return ShowMatcher()
-
-
-def test_corpus_match_rate(corpus_data, matcher, caplog):
+def test_corpus_match_rate(corpus_data, caplog):
     """Test that corpus matches at least 98% of shows."""
     shows = corpus_data.get("items", [])
     assert len(shows) > 0, "Corpus should have shows"
@@ -38,19 +32,21 @@ def test_corpus_match_rate(corpus_data, matcher, caplog):
     unmatched = []
     errors = []
     
-    for show in shows:
-        try:
-            result = matcher.match(show)
-            assert result is not None, f"Match returned None for {show}"
-            
-            if result.is_matched():
-                matched += 1
-                method = result.match_method or "unknown"
-                by_method[method] = by_method.get(method, 0) + 1
-            else:
-                unmatched.append(show.get("titles", {}).get("en", "Unknown"))
-        except Exception as e:
-            errors.append((show.get("titles", {}).get("en", "Unknown"), str(e)))
+    # Use context manager for matcher to ensure cleanup
+    with ShowMatcher() as matcher:
+        for show in shows:
+            try:
+                result = matcher.match(show)
+                assert result is not None, f"Match returned None for {show}"
+                
+                if result.is_matched():
+                    matched += 1
+                    method = result.match_method or "unknown"
+                    by_method[method] = by_method.get(method, 0) + 1
+                else:
+                    unmatched.append(show.get("titles", {}).get("en", "Unknown"))
+            except Exception as e:
+                errors.append((show.get("titles", {}).get("en", "Unknown"), str(e)))
     
     match_rate = matched / len(shows)
     
