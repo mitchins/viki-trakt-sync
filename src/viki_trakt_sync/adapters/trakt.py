@@ -156,6 +156,23 @@ class TraktAdapter:
             tvdb_id=tvdb_id,
         )
     
+    def _format_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+        """Format a datetime object or string to ISO format.
+        
+        Args:
+            dt: datetime object, string, or None
+            
+        Returns:
+            ISO format string or None
+        """
+        if dt is None:
+            return None
+        if isinstance(dt, str):
+            return dt
+        if hasattr(dt, 'isoformat'):
+            return dt.isoformat()
+        return str(dt)
+    
     def sync_watched(self, episodes: List[TraktEpisode]) -> Dict[str, int]:
         """Sync watched episodes to Trakt.
         
@@ -201,21 +218,6 @@ class TraktAdapter:
         except Exception as e:
             logger.error(f"Failed to sync {len(episodes)} episodes to Trakt: {e}")
             return {"added": 0, "existing": 0, "failed": len(episodes)}
-        """Format a datetime object or string to ISO format.
-        
-        Args:
-            dt: datetime object, string, or None
-            
-        Returns:
-            ISO format string or None
-        """
-        if dt is None:
-            return None
-        if isinstance(dt, str):
-            return dt
-        if hasattr(dt, 'isoformat'):
-            return dt.isoformat()
-        return str(dt)
         
         # Build sync payload
         payload = {

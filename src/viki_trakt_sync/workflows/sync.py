@@ -184,6 +184,15 @@ class SyncWorkflow:
         # STEP 3: Upsert episodes with watch status
         for viki_id, videos in watch_status.items():
             for video_id, watch_data in videos.items():
+                # Parse timestamp if available (ISO 8601 string from Viki API)
+                watched_at = None
+                if watch_data.get("timestamp"):
+                    try:
+                        watched_at = datetime.fromisoformat(watch_data["timestamp"].replace('Z', '+00:00'))
+                    except (ValueError, AttributeError):
+                        # If parsing fails, fall back to None (will use default in repo)
+                        logger.debug(f"Could not parse timestamp for {video_id}: {watch_data.get('timestamp')}")
+                
                 self.repo.upsert_episode(
                     viki_video_id=video_id,
                     viki_id=viki_id,
@@ -191,6 +200,7 @@ class SyncWorkflow:
                     duration=watch_data["duration"],
                     watched_seconds=watch_data["watched_seconds"],
                     credits_marker=watch_data.get("credits_marker"),
+                    last_watched_at=watched_at,  # Use Viki marker timestamp
                 )
                 result.episodes_fetched += 1
         

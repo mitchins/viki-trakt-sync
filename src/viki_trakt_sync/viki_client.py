@@ -98,6 +98,19 @@ class VikiClient:
             raise ValueError(f"API request failed with status {response.status_code}: {response.text[:100]}")
         
         return response.json()
+    
+    def get_watch_markers(self, from_timestamp: int = 1) -> Dict[str, Any]:
+        """Get watch markers (alias for get_watch_history).
+        
+        Provides compatibility with VikiClientProtocol.
+        
+        Args:
+            from_timestamp: Unix timestamp to fetch markers from (default: 1 for all)
+            
+        Returns:
+            Watch markers response
+        """
+        return self.get_watch_history(from_timestamp=from_timestamp)
 
     def get_container(self, container_id: str) -> Dict[str, Any]:
         """Get container (show) details."""

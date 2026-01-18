@@ -230,7 +230,8 @@ class VikiAdapter:
                 "watched_seconds": int,
                 "episode_number": int,
                 "duration": int,
-                "credits_marker": Optional[int]
+                "credits_marker": Optional[int],
+                "timestamp": Optional[str]  # Viki marker timestamp (ISO 8601)
               }
             - Current timestamp (to save for next incremental sync)
             
@@ -245,7 +246,9 @@ class VikiAdapter:
         current_timestamp = int(time.time())
         
         # Step 1: Get watch status (SOURCE OF TRUTH) - ONE global call
-        watch_markers = self.get_watch_progress(from_timestamp=from_timestamp)
+        watch_markers_response = self.client.get_watch_markers(from_timestamp=from_timestamp)
+        watch_markers = watch_markers_response.get("markers", {})
+        
         if not watch_markers:
             logger.info("No watch status found")
             return {}, current_timestamp
@@ -261,7 +264,15 @@ class VikiAdapter:
             episode_by_id = {ep.viki_video_id: ep for ep in episodes}
             
             # Merge watch status with episode metadata
-            for video_id, watched_seconds in videos.items():
+            for video_id, marker in videos.items():
+                # marker might be a dict with watch_marker, timestamp, etc.
+                if isinstance(marker, dict):
+                    watched_seconds = marker.get("watch_marker", marker.get("watched_seconds", 0))
+                    timestamp = marker.get("timestamp")  # Viki's timestamp for when watched
+                else:
+                    watched_seconds = marker
+                    timestamp = None
+                
                 episode = episode_by_id.get(video_id)
                 
                 result[container_id][video_id] = {
@@ -269,6 +280,7 @@ class VikiAdapter:
                     "episode_number": episode.episode_number if episode else 0,
                     "duration": episode.duration if episode else 0,
                     "credits_marker": episode.credits_marker if episode else None,
+                    "timestamp": timestamp,  # Include Viki's marker timestamp
                 }
         
         logger.info(f"Watch status with metadata for {len(result)} shows")
