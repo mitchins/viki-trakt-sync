@@ -19,10 +19,19 @@ import logging
 import re
 import requests
 from bs4 import BeautifulSoup
-from fake_useragent import UserAgent
 import json
 
 logger = logging.getLogger(__name__)
+
+# Initialize user agent once with fallback
+_MDL_USER_AGENT: str = ""
+try:
+    from fake_useragent import UserAgent
+    _ua = UserAgent(browsers=['chrome'], os=['macos'], platforms=['pc'], min_version=120)
+    _MDL_USER_AGENT = _ua.random
+except Exception as e:
+    logger.debug(f"fake-useragent initialization failed, using fallback: {e}")
+    _MDL_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
 
 
 class MdlClient:
@@ -31,10 +40,9 @@ class MdlClient:
     def __init__(self):
         """Initialize MDL client."""
         self.session = requests.Session()
-        # Use realistic user agent string from fake-useragent library
-        ua = UserAgent()
+        # Use persistent user agent for all requests
         self.session.headers.update({
-            'User-Agent': ua.random
+            'User-Agent': _MDL_USER_AGENT
         })
         self.base_url = "https://mydramalist.com"
 

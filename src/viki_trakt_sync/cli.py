@@ -136,6 +136,8 @@ def trakt_doctor():
     import importlib.metadata as md
     import importlib.util as util
     
+    config = get_config()
+    
     try:
         dist_trakt = None
         dist_pytrakt = None

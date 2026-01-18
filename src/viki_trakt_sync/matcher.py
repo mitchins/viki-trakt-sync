@@ -225,6 +225,7 @@ class ShowMatcher:
         self,
         trakt_client_id: Optional[str] = None,
         trakt_client_secret: Optional[str] = None,
+        tvdb_api_key: Optional[str] = None,
         db_path: Optional[Path] = None,
         config_provider: Optional['ConfigProvider'] = None,
     ):
@@ -233,6 +234,7 @@ class ShowMatcher:
         Args:
             trakt_client_id: Trakt API client ID (overrides config)
             trakt_client_secret: Trakt API client secret (overrides config)
+            tvdb_api_key: TVDB API key (overrides config)
             db_path: Path to matches database
             config_provider: Configuration provider (injected dependency)
         """
@@ -241,11 +243,15 @@ class ShowMatcher:
         # Get credentials from explicit parameters or config provider
         client_id = trakt_client_id
         client_secret = trakt_client_secret
+        self.tvdb_api_key = tvdb_api_key
         
         if not client_id and config_provider:
             trakt_config = config_provider.get_section("trakt")
             client_id = trakt_config.get("client_id")
             client_secret = trakt_config.get("client_secret")
+        
+        if not self.tvdb_api_key and config_provider:
+            self.tvdb_api_key = config_provider.get("tvdb", "api_key")
 
         # Configure Trakt via pytrakt (hard requirement for full sync)
         if not client_id:
@@ -502,9 +508,9 @@ class ShowMatcher:
         """
         viki_id = viki_show.get("id") or viki_show.get("viki_id")
 
-        api_key = os.getenv("TVDB_API_KEY")
+        api_key = self.tvdb_api_key or os.getenv("TVDB_API_KEY")  # Fallback to env for backward compat
         if not api_key:
-            return MatchResult(viki_id=viki_id, viki_title=viki_title, notes="Missing TVDB_API_KEY")
+            return MatchResult(viki_id=viki_id, viki_title=viki_title, notes="Missing TVDB API key in config")
 
         try:
             tvdb = get_tvdb_session()
@@ -605,7 +611,7 @@ class ShowMatcher:
         """
         viki_id = viki_show.get("id") or viki_show.get("viki_id")
 
-        api_key = os.getenv("TVDB_API_KEY")
+        api_key = self.tvdb_api_key or os.getenv("TVDB_API_KEY")  # Fallback to env for backward compat
         if not api_key:
             return MatchResult(viki_id=viki_id, viki_title=viki_title)
 
@@ -776,9 +782,9 @@ class ShowMatcher:
                 return MatchResult(viki_id=viki_id, viki_title=viki_title)
             
             # Step 4: Try to match each alias to TVDB
-            api_key = os.getenv("TVDB_API_KEY")
+            api_key = self.tvdb_api_key or os.getenv("TVDB_API_KEY")  # Fallback to env for backward compat
             if not api_key:
-                logger.debug("MDL tier: Missing TVDB_API_KEY")
+                logger.debug("MDL tier: Missing TVDB API key in config")
                 return MatchResult(viki_id=viki_id, viki_title=viki_title)
             
             try:
