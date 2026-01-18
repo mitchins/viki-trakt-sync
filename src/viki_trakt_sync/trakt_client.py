@@ -20,15 +20,16 @@ class TraktClient:
         """Initialize Trakt client with credentials.
         
         Args:
-            client_id: Trakt API client ID (or TRAKT_CLIENT_ID env var)
-            client_secret: Trakt API client secret (or TRAKT_CLIENT_SECRET env var)
+            client_id: Trakt API client ID (from settings.toml)
+            client_secret: Trakt API client secret (from settings.toml)
         """
-        self.client_id = client_id or os.getenv("TRAKT_CLIENT_ID")
-        self.client_secret = client_secret or os.getenv("TRAKT_CLIENT_SECRET")
-        self.access_token = os.getenv("TRAKT_ACCESS_TOKEN")
+        # Credentials MUST come from config, not environment variables
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.access_token = None  # Set via configure_oauth_token() if needed
         
         if not self.client_id or not self.client_secret:
-            raise RuntimeError("TRAKT_CLIENT_ID and TRAKT_CLIENT_SECRET are required")
+            raise RuntimeError("TRAKT_CLIENT_ID and TRAKT_CLIENT_SECRET are required in settings.toml [trakt] section")
         
         # Configure PyTrakt with credentials
         try:

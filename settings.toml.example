@@ -1,0 +1,40 @@
+# Viki-Trakt Sync Configuration
+# 
+# Place this file at one of:
+#   ~/.config/viki-trakt-sync/settings.toml (user config)
+#   /config/settings.toml (Docker)
+#   $XDG_CONFIG_HOME/viki-trakt-sync/settings.toml (XDG standard)
+
+[viki]
+# Required: API token from Viki
+# Extract from browser: DevTools → Network → look for API calls with ?token=...
+token = "ex1UPAVURALACKBR..."
+
+# Required: User ID (extracted from token or API response)
+# Token format includes it: ex1UP...2u{user_id}ut...
+user_id = "47157398u"
+
+# Optional: Session cookie for fallback authentication
+# Get from: DevTools → Application → Cookies → https://www.viki.com → session__id
+# session = "N1V3akdEV1FtSHVJODJMcXJxRFMrYllMekptdWpUM3poVEVVRHFqY05sVVJuZzRLMHcxUGM4RzI3TWR6endSMDlFRmM2VEFiNEZxYWo1VU9TYzYvMVZNZEl0M3lITGkyMFdFenJyV1dNVDFjNFVDWWx5ejY2MHNWUExsQm9TamI0eC9JNC9BVWRwS1YveHpjazVMclRoRmN5YU13UUw0Q1ZlVHVoYkc2RUI="
+
+[trakt]
+# Required for matching: Trakt.tv OAuth app credentials
+# Create app at: https://trakt.tv/oauth/applications
+client_id = "1de6fc441196f9d0247d2c1734e50efc77c192621bda350c4c4e1e3216921d53"
+client_secret = "39ac628e98a579c3af3fcd56088743d46680352f5117163daaf89988fe4bab59"
+
+# Optional: Access token for Trakt API (if available)
+# access_token = ""
+
+[tmdb]
+# Optional: TMDB API key for enhanced matching
+api_key = "caf82eaeb39d5baaf870657217f3ff47"
+
+[tvdb]
+# Optional: TVDB API key for enhanced matching  
+api_key = "5fc94d21-624e-4313-84bd-0424edc99886"
+
+[mdblist]
+# Optional: MyDramaList API key for enhanced matching
+api_key = "elao7zskrygv4on8rkeqjk059"

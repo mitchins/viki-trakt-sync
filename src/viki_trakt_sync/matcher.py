@@ -13,13 +13,16 @@ import sqlite3
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import requests
 
 from .http_cache import get_trakt_session
 from .http_cache import get_tvdb_session
 from .trakt_client import TraktClient
+
+if TYPE_CHECKING:
+    from .config_provider import ConfigProvider
 
 logger = logging.getLogger(__name__)
 
@@ -223,26 +226,35 @@ class ShowMatcher:
         trakt_client_id: Optional[str] = None,
         trakt_client_secret: Optional[str] = None,
         db_path: Optional[Path] = None,
+        config_provider: Optional['ConfigProvider'] = None,
     ):
         """Initialize matcher.
 
         Args:
-            trakt_client_id: Trakt API client ID
-            trakt_client_secret: Trakt API client secret
+            trakt_client_id: Trakt API client ID (overrides config)
+            trakt_client_secret: Trakt API client secret (overrides config)
             db_path: Path to matches database
+            config_provider: Configuration provider (injected dependency)
         """
         self.db = MatchDB(db_path)
 
+        # Get credentials from explicit parameters or config provider
+        client_id = trakt_client_id
+        client_secret = trakt_client_secret
+        
+        if not client_id and config_provider:
+            trakt_config = config_provider.get_section("trakt")
+            client_id = trakt_config.get("client_id")
+            client_secret = trakt_config.get("client_secret")
+
         # Configure Trakt via pytrakt (hard requirement for full sync)
-        env_client_id = os.getenv("TRAKT_CLIENT_ID")
-        env_client_secret = os.getenv("TRAKT_CLIENT_SECRET")
-        if not (trakt_client_id or env_client_id):
+        if not client_id:
             logger.warning("Trakt matching disabled: missing TRAKT_CLIENT_ID")
             self.trakt_available = False
             self.trakt = None
         else:
             self.trakt_available = True
-            self.trakt = TraktClient(trakt_client_id or env_client_id, trakt_client_secret or env_client_secret)
+            self.trakt = TraktClient(client_id, client_secret)
     
     def __enter__(self):
         """Context manager entry."""

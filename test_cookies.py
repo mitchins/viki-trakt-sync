@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+import requests
+
+s = requests.Session()
+s.cookies.set("session__id", "100000a-1768380923637-2611fadb-52b2-4127-8672-73ffa543330a", domain=".viki.com")
+s.cookies.set("_viki_session", "Y2QycTNGbXVsdTByRjBUTHdBOE5vUnZFYzZWbzBYSTA4RXpwQmV6WVlnbFkveXpLbllTa203NXpHZUtNUFBWcWpOOVYyTkg2b1NaZWFMSC8yTFZKeDIrQjBIcHJsR3JQMFhncVNjRWxpOVR4OUJuUnJ2T0NmN0dZRGJaekRtMkdQa2NoMUcwMHUzSmpzTVV0UmJ0cFIzVHc1M2ppcWJNSkdkRVh3V2VCQloycUdwK0lnT0NpazllMVpxVzF0VkpodDFzTjVXcDQ1UkJid241ZUFENEljT3FyR3FLL01pQm11eFNURkUyM3R4cjJCTzJ5dE8wWlpwVG5FRnYwc0pNVURXUGdLVHVJanpTeUJFWERjbHJhYjJaTW1ZSDNTQzdibTJIRW5QZkp3N1F0R2xaUzJ6b044R2N6djNBNzJKNmNGQ0YzRzhVT2ZWenoxWWMzdkhPclBCYnJNK0JzNGRyVk8xRk5oSW8zK2F1Yk80Vnk1K1VPdk1rZlVpWWRNcDh4NTZaM0xtb1dBNlR2Vmt0ZktqQWM0V3F3dEIrNzYxUGYrSWVIWnJsbFNXYzNqTXc5NVJ3QVBxV3hCRWN0U3RzTjgyR2M0TTRDQ3RaZGYwTTVIeWpXS1F0dnZoL2p1Z0htRDVsSWxiRml0NWdjTkVsdGJiakQ3OFhNTzI5MnZObzFaRWl5c3U0bUpLckp2SFgxbmFRTG5MS3AweUJwR3VGQ3RrWkR0dmptVklscWpCeURrdU1qbTFQUW9jQ3BWU0ZNWnI0WndSNXBHSUVZTUE0OXV2bDN6MzBrM0dvSi9TWHBNc21zMzd1QWVEeENoQ01ScjN2Uy9aSmw0QXN5N3c5V0lqUjZTTFF0a2g3VmQvajEwRFdCSlFIR2JBQWNDUTFTem93d1RFZzZWaTdtL3BKMmRrNVJ6RzgzbHBEMUhQZWtjUWU1RE5tQmxrM25vc3JtRkxEa1B6WXcreUJscWtOc1RoZlNiUGFNZTJJPS0taXdobzJjR0liU2VQSWpSMlhVN2Qxdz09--685952464f073dbf76199cc0713179098cc007fa", domain=".viki.com")
+
+print("Cookies set:")
+print(s.cookies)
+print()
+
+resp = s.get("https://www.viki.com/api/vw_watch_markers?from=1768474054")
+print(f"Status: {resp.status_code}")
+print(f"Response: {resp.text[:300]}")
+print()
+print("Cookies in jar after request:")
+print(s.cookies)
