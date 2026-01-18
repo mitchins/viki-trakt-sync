@@ -195,14 +195,12 @@ class TraktAdapter:
             result = self._post_sync_history(payload)
             return {
                 "added": result.get("added", {}).get("episodes", 0),
-                "existing": result.get("not_found", {}).get("episodes", 0),
+                "existing": result.get("existing", {}).get("episodes", 0),  # FIXED: was 'not_found'
                 "failed": 0,
             }
         except Exception as e:
             logger.error(f"Failed to sync {len(episodes)} episodes to Trakt: {e}")
             return {"added": 0, "existing": 0, "failed": len(episodes)}
-    
-    def _format_datetime(self, dt: Optional[Any]) -> Optional[str]:
         """Format a datetime object or string to ISO format.
         
         Args:

@@ -139,8 +139,11 @@ class MatchCorpusBuilder:
 
             # Slug candidates from title normalization and common year suffixes
             import re
+            from datetime import datetime
             slug_base = re.sub(r"[^a-z0-9]+", "-", title_en.lower()).strip("-")
-            slug_candidates = [slug_base] + [f"{slug_base}-{y}" for y in (2024, 2025, 2026)]
+            current_year = datetime.now().year
+            year_candidates = [current_year, current_year - 1, current_year + 1, current_year - 2]
+            slug_candidates = [slug_base] + [f"{slug_base}-{y}" for y in year_candidates]
             slug_fetch = self._trakt_slug_fetch(slug_candidates)
 
             # Current matcher result

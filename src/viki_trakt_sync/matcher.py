@@ -446,7 +446,11 @@ class ShowMatcher:
                     break
         if chosen is None:
             # 3) Try direct slug lookup via pytrakt (handles shows not indexed by search)
-            for slug_try in [slug_query, f"{slug_query}-2025", f"{slug_query}-2024", f"{slug_query}-2026"]:
+            from datetime import datetime
+            current_year = datetime.now().year
+            year_candidates = [current_year, current_year - 1, current_year + 1, current_year - 2]
+            slug_candidates = [slug_query] + [f"{slug_query}-{y}" for y in year_candidates]
+            for slug_try in slug_candidates:
                 data = getattr(self.trakt, "get_show_by_slug", lambda s: None)(slug_try)
                 if data:
                     ids = data.get("ids", {})

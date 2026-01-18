@@ -388,8 +388,11 @@ class SyncWorkflow:
         
         result = self.trakt.sync_watched(trakt_episodes)
         
-        # Mark as synced
-        if result.get("added", 0) > 0:
+        # Mark as synced when episodes are added OR already existing (idempotent)
+        # If result shows items were synced, mark all as done
+        synced_count = result.get("added", 0) + result.get("existing", 0)
+        if synced_count > 0:
             self.repo.mark_episodes_synced(episodes)
+            return len(episodes)  # Return total submitted, not just newly added
         
-        return result.get("added", 0)
+        return 0

@@ -161,15 +161,24 @@ class Repository:
         )
     
     def mark_episodes_synced(self, episodes: List[Episode]) -> int:
-        """Mark episodes as synced to Trakt."""
+        """Mark episodes as synced to Trakt (atomic operation)."""
+        if not episodes:
+            return 0
+        
         now = datetime.now(timezone.utc)
-        count = 0
-        for ep in episodes:
-            ep.synced_to_trakt = True
-            ep.synced_at = now
-            ep.save()
-            count += 1
-        return count
+        
+        # Wrap in transaction for atomicity
+        try:
+            with database.atomic():
+                for ep in episodes:
+                    ep.synced_to_trakt = True
+                    ep.synced_at = now
+                    ep.save()
+        except Exception as e:
+            logger.error(f"Failed to mark {len(episodes)} episodes as synced: {e}")
+            return 0
+        
+        return len(episodes)
     
     # --- Match Operations ---
     
