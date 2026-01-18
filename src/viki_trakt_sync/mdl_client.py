@@ -19,6 +19,7 @@ import logging
 import re
 import requests
 from bs4 import BeautifulSoup
+from fake_useragent import UserAgent
 import json
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,10 @@ class MdlClient:
     def __init__(self):
         """Initialize MDL client."""
         self.session = requests.Session()
+        # Use realistic user agent string from fake-useragent library
+        ua = UserAgent()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0'
+            'User-Agent': ua.random
         })
         self.base_url = "https://mydramalist.com"
 
@@ -41,7 +44,7 @@ class MdlClient:
         Flow:
           1. Search MDL: GET /search?q={title}
           2. Get first result URL
-          3. Load detail page
+          3. Load detail page (HTML scrape)
           4. Extract English aliases from JSON-LD
           5. Extract Viki ID from "where to watch" links
 
@@ -50,30 +53,26 @@ class MdlClient:
             origin_country: ISO country code (unused, kept for API compatibility)
 
         Returns:
-            Dict with:
-              - english_aliases: List of English alternative titles
-              - viki_id: Viki show ID if found
-              - mdl_url: Link to MDL page
-              - mdl_id: MDL show ID
-            Or None if not found
+            Dict with 'english_aliases' list and 'viki_id' string, or None if not found
         """
         try:
             # Step 1: Search MDL
-            logger.debug(f"Searching MDL for: {title}")
             search_url = f"{self.base_url}/search"
-            resp = self.session.get(search_url, params={"q": title}, timeout=10)
-            resp.raise_for_status()
+            logger.debug(f"Searching MDL for: {title}")
 
-            soup = BeautifulSoup(resp.content, 'html.parser')
-            
-            # Step 2: Find first result
-            result_box = soup.find('div', class_='box')
-            if not result_box:
+            search_resp = self.session.get(search_url, params={'q': title}, timeout=10)
+            search_resp.raise_for_status()
+
+            search_soup = BeautifulSoup(search_resp.content, 'html.parser')
+
+            # Step 2: Extract first result link
+            results = search_soup.find_all('a', class_='text-primary')
+            if not results:
                 logger.debug(f"MDL: No results for {title}")
                 return None
 
-            result_link = result_box.find('a')
-            if not result_link or not result_link.get('href'):
+            result_link = results[0]
+            if not result_link:
                 logger.debug(f"MDL: No link in first result")
                 return None
 
@@ -140,24 +139,8 @@ class MdlClient:
             return None
 
     def search_title(self, title: str) -> Optional[Dict]:
-        """Alias for search_alias() for backward compatibility."""
-        return self.search_alias(title)
-
-            logger.debug(f"MDL search found results but no TVDB ID for: {title}")
-            return None
-
-        except requests.RequestException as e:
-            logger.debug(f"MDL API error for '{title}': {e}")
-            return None
-        except Exception as e:
-            logger.error(f"MDL search error for '{title}': {e}")
-            return None
-
-    def search_title(self, title: str) -> Optional[Dict]:
         """Simple title search without country filtering.
 
         Returns the first matching show's basic info.
         """
         return self.search_alias(title, origin_country=None)
-
-

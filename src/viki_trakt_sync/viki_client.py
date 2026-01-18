@@ -7,8 +7,12 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import requests
+from fake_useragent import UserAgent
 
 logger = logging.getLogger(__name__)
+
+# Initialize user agent generator
+_ua = UserAgent()
 
 
 class VikiClient:
@@ -16,7 +20,7 @@ class VikiClient:
 
     BASE_URL = "https://www.viki.com"
     
-    # Headers that work - copied exactly from test.py
+    # Base headers (user-agent will be added dynamically)
     HEADERS = {
         'accept': 'application/json, text/plain, */*',
         'accept-language': 'en',
@@ -28,7 +32,6 @@ class VikiClient:
         'sec-fetch-dest': 'empty',
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-origin',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
         'x-viki-app-ver': '26.1.3-4.43.1',
         'x-viki-device-id': '276378550d',
     }
@@ -45,20 +48,26 @@ class VikiClient:
         self.token = token
         self.user_id = user_id
         
+        # Create request headers with realistic user agent
+        self.headers = self.HEADERS.copy()
+        self.headers['user-agent'] = _ua.random
+        
         # Verify we have the critical cookies
         required = ['session__id', '_viki_session']
         missing = [k for k in required if k not in cookies]
         if missing:
-            logger.warning(f"Missing cookies that may be required: {missing}")
+            raise ValueError(f"Missing required cookies: {missing}")
 
-    def get_watch_markers(self, from_timestamp: int = 1) -> Dict[str, Any]:
-        """Get watch markers - uses exact same pattern as test.py.
+    def get_watch_history(self, from_timestamp: int = 0) -> Dict[str, Any]:
+        """Get user's watch history.
+        
+        This is the main entry point - mimics test.py exactly.
         
         Args:
-            from_timestamp: Unix timestamp for incremental sync (1 = all history)
+            from_timestamp: Unix timestamp to fetch history from
             
         Returns:
-            Watch markers response dict
+            Response dict with watch markers/history data
         """
         params = {'from': str(from_timestamp)}
         
@@ -69,7 +78,7 @@ class VikiClient:
             'https://www.viki.com/api/vw_watch_markers',
             params=params,
             cookies=self.cookies,
-            headers=self.HEADERS
+            headers=self.headers
         )
         
         logger.debug(f"Response status: {response.status_code}")
@@ -85,7 +94,7 @@ class VikiClient:
         url = f"https://api.viki.io/v4/containers/{container_id}.json"
         params = {"app": "100000a"}
         
-        response = requests.get(url, params=params, headers=self.HEADERS)
+        response = requests.get(url, params=params, headers=self.headers)
         response.raise_for_status()
         return response.json()
 
@@ -99,7 +108,7 @@ class VikiClient:
             "direction": "asc",
         }
         
-        response = requests.get(url, params=params, headers=self.HEADERS)
+        response = requests.get(url, params=params, headers=self.headers)
         response.raise_for_status()
         return response.json()
 
@@ -108,7 +117,7 @@ class VikiClient:
         url = f"https://api.viki.io/v4/videos/{video_id}.json"
         params = {"app": "100000a"}
         
-        response = requests.get(url, params=params, headers=self.HEADERS)
+        response = requests.get(url, params=params, headers=self.headers)
         response.raise_for_status()
         return response.json()
 
@@ -124,6 +133,6 @@ class VikiClient:
             "per_page": per_page,
         }
         
-        response = requests.get(url, params=params, cookies=self.cookies, headers=self.HEADERS)
+        response = requests.get(url, params=params, headers=self.headers)
         response.raise_for_status()
         return response.json()
