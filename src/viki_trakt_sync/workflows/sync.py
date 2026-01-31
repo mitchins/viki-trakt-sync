@@ -40,6 +40,7 @@ class SyncResult:
     matches_attempted: int = 0
     matches_found: int = 0
     episodes_synced: int = 0
+    sync_session_id: Optional[int] = None  # For undo capability
     errors: List[str] = None
     
     def __post_init__(self):
@@ -219,22 +220,27 @@ class SyncWorkflow:
         if not dry_run:
             unsynced = self.repo.get_unsynced_episodes()
             if unsynced:
-                log_progress(f"Syncing {len(unsynced)} episodes to Trakt...")
-                result.episodes_synced = self._sync_to_trakt(unsynced)
+                # Create sync session BEFORE syncing for undo capability
+                sync_log = self.repo.log_sync(
+                    operation="sync",
+                    shows_processed=result.shows_fetched,
+                    episodes_synced=len(unsynced),
+                    status="in_progress",
+                )
+                result.sync_session_id = sync_log.id
+                
+                log_progress(f"Syncing {len(unsynced)} episodes to Trakt (session #{sync_log.id})...")
+                result.episodes_synced = self._sync_to_trakt(unsynced, session_id=sync_log.id)
+                
+                # Update sync log with final status
+                sync_log.episodes_synced = result.episodes_synced
+                sync_log.status = "success" if result.episodes_synced > 0 else "failed"
+                sync_log.save()
             else:
                 log_progress("All episodes already synced")
         else:
             unsynced = self.repo.get_unsynced_episodes()
             log_progress(f"[DRY RUN] Would sync {len(unsynced)} episodes")
-        
-        # Log sync
-        self.repo.log_sync(
-            operation="sync",
-            shows_processed=result.shows_fetched,
-            episodes_synced=result.episodes_synced,
-            status="success" if not result.errors else "partial",
-            notes=f"Errors: {len(result.errors)}" if result.errors else None,
-        )
         
         log_progress("Sync complete!")
         return result
@@ -372,8 +378,12 @@ class SyncWorkflow:
             )
         return str(titles) if titles else f"Show {container.get('id', 'unknown')}"
     
-    def _sync_to_trakt(self, episodes: List) -> int:
+    def _sync_to_trakt(self, episodes: List, session_id: Optional[int] = None) -> int:
         """Sync watched episodes to Trakt.
+        
+        Args:
+            episodes: Episodes to sync
+            session_id: SyncLog.id to link for undo capability
         
         Returns count of synced episodes.
         """
@@ -402,7 +412,7 @@ class SyncWorkflow:
         # If result shows items were synced, mark all as done
         synced_count = result.get("added", 0) + result.get("existing", 0)
         if synced_count > 0:
-            self.repo.mark_episodes_synced(episodes)
+            self.repo.mark_episodes_synced(episodes, session_id=session_id)
             return len(episodes)  # Return total submitted, not just newly added
         
         return 0

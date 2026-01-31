@@ -90,6 +90,7 @@ class Episode(BaseModel):
     # Trakt sync tracking
     synced_to_trakt = BooleanField(default=False)
     synced_at = DateTimeField(null=True)
+    sync_session_id = IntegerField(null=True, index=True)  # Links to SyncLog.id for undo
     
     class Meta:
         table_name = 'episodes'

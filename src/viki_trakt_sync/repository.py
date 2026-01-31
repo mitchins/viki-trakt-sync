@@ -160,8 +160,13 @@ class Repository:
             )
         )
     
-    def mark_episodes_synced(self, episodes: List[Episode]) -> int:
-        """Mark episodes as synced to Trakt (atomic operation)."""
+    def mark_episodes_synced(self, episodes: List[Episode], session_id: Optional[int] = None) -> int:
+        """Mark episodes as synced to Trakt (atomic operation).
+        
+        Args:
+            episodes: Episodes to mark as synced
+            session_id: SyncLog.id to link for undo capability
+        """
         if not episodes:
             return 0
         
@@ -173,12 +178,47 @@ class Repository:
                 for ep in episodes:
                     ep.synced_to_trakt = True
                     ep.synced_at = now
+                    ep.sync_session_id = session_id
                     ep.save()
         except Exception as e:
             logger.error(f"Failed to mark {len(episodes)} episodes as synced: {e}")
             return 0
         
         return len(episodes)
+    
+    def undo_sync(self, session_id: int) -> int:
+        """Undo a sync session by clearing sync flags for all episodes in that session.
+        
+        Args:
+            session_id: SyncLog.id to undo
+            
+        Returns:
+            Number of episodes reverted
+        """
+        try:
+            with database.atomic():
+                count = (
+                    Episode.update(
+                        synced_to_trakt=False,
+                        synced_at=None,
+                        sync_session_id=None,
+                    )
+                    .where(Episode.sync_session_id == session_id)
+                    .execute()
+                )
+            logger.info(f"Reverted {count} episodes from sync session {session_id}")
+            return count
+        except Exception as e:
+            logger.error(f"Failed to undo sync session {session_id}: {e}")
+            return 0
+    
+    def get_sync_session_episodes(self, session_id: int) -> List[Episode]:
+        """Get all episodes synced in a specific session."""
+        return list(
+            Episode.select()
+            .join(Show)
+            .where(Episode.sync_session_id == session_id)
+        )
     
     # --- Match Operations ---
     

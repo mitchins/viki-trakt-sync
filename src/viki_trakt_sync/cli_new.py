@@ -127,11 +127,12 @@ def refresh(force: bool):
 # SYNC Command
 # ============================================================
 
-@click.command()
+@click.group(invoke_without_command=True)
 @click.option("--force-refresh", is_flag=True, help="Force refresh all shows")
 @click.option("--dry-run", is_flag=True, help="Preview only, don't sync to Trakt")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def sync(force_refresh: bool, dry_run: bool, verbose: bool):
+@click.pass_context
+def sync(ctx, force_refresh: bool, dry_run: bool, verbose: bool):
     """Sync watch history from Viki to Trakt.
     
     This is the main workflow that:
@@ -139,7 +140,15 @@ def sync(force_refresh: bool, dry_run: bool, verbose: bool):
     2. Refreshes episodes for shows that changed
     3. Matches unmatched shows to Trakt
     4. Syncs watched episodes to Trakt
+    
+    Subcommands:
+      undo <session_id>   Revert a sync session
+      history             Show recent sync sessions
     """
+    # If no subcommand, run the default sync
+    if ctx.invoked_subcommand is not None:
+        return
+    
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
     
@@ -189,6 +198,10 @@ def sync(force_refresh: bool, dry_run: bool, verbose: bool):
     click.echo(f"  Matches found:    {result.matches_found}/{result.matches_attempted}")
     click.echo(f"  Episodes synced:  {result.episodes_synced}")
     
+    # Show session ID for undo capability
+    if result.sync_session_id and result.episodes_synced > 0:
+        click.echo(f"\n💾 Sync session #{result.sync_session_id} - to undo: viki-trakt-sync sync undo {result.sync_session_id}")
+    
     # Show errors FIRST if there are any (don't hide them with tree output)
     if result.errors:
         click.echo(f"\n❌ ERRORS ({len(result.errors)}):") 
@@ -213,11 +226,20 @@ def _print_episode_status_tree(viki_adapter):
     click.echo("\n📺 Episode Status:\n")
     
     for show_idx, show in enumerate(shows):
-        # Show header
+        # Show header with Trakt match indicator
         show_title = show.title or f"Unknown ({show.viki_id})"
         is_last_show = show_idx == len(shows) - 1
         show_prefix = "└─ " if is_last_show else "├─ "
-        click.echo(f"{show_prefix}{show_title}")
+        
+        # Trakt match: show slug if matched, ⚠ if not
+        if show.trakt_slug:
+            trakt_info = f" → trakt:{show.trakt_slug}"
+        elif show.trakt_id:
+            trakt_info = f" → trakt:{show.trakt_id}"
+        else:
+            trakt_info = " ⚠ no match"
+        
+        click.echo(f"{show_prefix}{show_title}{trakt_info}")
         
         # Get episodes
         viki_id_str = str(show.viki_id)
@@ -266,6 +288,84 @@ def _print_episode_status_tree(viki_adapter):
         if len(episodes) > 10:
             base_prefix = "   " if is_last_show else "   │"
             click.echo(f"{base_prefix}└─ ... and {len(episodes) - 10} more episodes")
+
+
+# ============================================================
+# SYNC Subcommands
+# ============================================================
+
+@sync.command("undo")
+@click.argument("session_id", type=int)
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+def sync_undo(session_id: int, yes: bool):
+    """Undo a sync session by clearing synced flags.
+    
+    This reverts the local database state - episodes will be marked
+    as unsynced and will be re-synced on the next run.
+    
+    Note: This does NOT remove watch history from Trakt (that's permanent).
+    Use this if you synced wrong matches and want to fix them first.
+    """
+    repo = Repository()
+    
+    # Get episodes in this session
+    episodes = repo.get_sync_session_episodes(session_id)
+    
+    if not episodes:
+        click.echo(f"No episodes found for session #{session_id}")
+        return
+    
+    # Group by show for display
+    by_show = {}
+    for ep in episodes:
+        show = ep.show
+        if show.title not in by_show:
+            by_show[show.title] = []
+        by_show[show.title].append(ep.episode_number)
+    
+    click.echo(f"\n📦 Session #{session_id} contains {len(episodes)} episodes:\n")
+    for show_title, ep_nums in by_show.items():
+        eps_str = ", ".join(str(n) for n in sorted(ep_nums)[:5])
+        if len(ep_nums) > 5:
+            eps_str += f", ... (+{len(ep_nums) - 5} more)"
+        click.echo(f"  • {show_title}: Ep {eps_str}")
+    
+    if not yes:
+        click.confirm("\nRevert these episodes to unsynced?", abort=True)
+    
+    count = repo.undo_sync(session_id)
+    click.echo(f"\n✓ Reverted {count} episodes - they will sync again on next run")
+
+
+@sync.command("history")
+@click.option("--limit", "-n", default=10, help="Number of sessions to show")
+def sync_history(limit: int):
+    """Show recent sync sessions."""
+    from .models import SyncLog
+    
+    sessions = list(
+        SyncLog.select()
+        .order_by(SyncLog.timestamp.desc())
+        .limit(limit)
+    )
+    
+    if not sessions:
+        click.echo("No sync history found")
+        return
+    
+    click.echo(f"\n📜 Recent Sync Sessions:\n")
+    click.echo(f"  {'ID':>4}  {'Date':19}  {'Episodes':>8}  {'Status':10}")
+    click.echo(f"  {'─'*4}  {'─'*19}  {'─'*8}  {'─'*10}")
+    
+    for s in sessions:
+        # Handle both datetime objects and strings
+        if hasattr(s.timestamp, 'strftime'):
+            ts = s.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            ts = str(s.timestamp)[:19] if s.timestamp else "?"
+        click.echo(f"  {s.id:>4}  {ts}  {s.episodes_synced:>8}  {s.status}")
+    
+    click.echo(f"\nTo undo a session: viki-trakt-sync sync undo <ID>")
 
 
 # ============================================================
